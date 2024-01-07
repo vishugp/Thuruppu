@@ -2,6 +2,7 @@ import random
 import numpy as np
 
 suits = ['C','D','H','S']
+suits = ["♠","♣","♥","♦" ]
 ranks  = {  "J":3,
             "9":2,
             "A":1,"10":1,
