@@ -10,26 +10,56 @@ var translate = Deck.translate
 var $container = document.getElementById('container')
 var $topbar = document.getElementById('topbar')
 
-var $sort = document.createElement('button')
-var $shuffle = document.createElement('button')
-var $bysuit = document.createElement('button')
-var $fan = document.createElement('button')
-var $flip = document.createElement('button')
 var $header = document.createElement('h1')
-
 $header.textContent = "Vish Cards Playground"
-$shuffle.textContent = 'Shuffle'
-$sort.textContent = 'Sort'
-$bysuit.textContent = 'By suit'
-$fan.textContent = 'Fan'
-$flip.textContent = 'Flip'
-
 $topbar.appendChild($header)
-$topbar.appendChild($flip)
-$topbar.appendChild($shuffle)
-$topbar.appendChild($bysuit)
-$topbar.appendChild($fan)
+
+var $sort = document.createElement('button')
+$sort.textContent = 'Sort'
 $topbar.appendChild($sort)
+$sort.addEventListener('click', function () {
+  deck.sort()
+})
+
+var $shuffle = document.createElement('button')
+$shuffle.textContent = 'Shuffle'
+$topbar.appendChild($shuffle)
+$shuffle.addEventListener('click', function () {
+  deck.shuffle()
+  deck.shuffle()
+})
+
+var $bysuit = document.createElement('button')
+$bysuit.textContent = 'By suit'
+$topbar.appendChild($bysuit)
+$bysuit.addEventListener('click', function () {
+  deck.sort(true) // sort reversed
+  deck.bysuit()
+})
+
+var $fan = document.createElement('button')
+$fan.textContent = 'Fan'
+$topbar.appendChild($fan)
+$fan.addEventListener('click', function () {
+  deck.fan()
+})
+
+var $flip = document.createElement('button')
+$flip.textContent = 'Flip'
+$topbar.appendChild($flip)
+$flip.addEventListener('click', function () {
+  deck.flip()
+})
+
+var $split = document.createElement('button')
+$split.textContent = '4 player split'
+$topbar.appendChild($split)
+$split.addEventListener('click', function () {
+  deck.sort(false)
+  deck.split()
+})
+
+
 
 var deck = Deck()
 deck.cards.forEach(function (card, i) {
@@ -37,25 +67,6 @@ deck.cards.forEach(function (card, i) {
   card.enableFlipping()
 })
 
-
-
-$shuffle.addEventListener('click', function () {
-  deck.shuffle()
-  deck.shuffle()
-})
-$sort.addEventListener('click', function () {
-  deck.sort()
-})
-$bysuit.addEventListener('click', function () {
-  deck.sort(true) // sort reversed
-  deck.bysuit()
-})
-$fan.addEventListener('click', function () {
-  deck.fan()
-})
-$flip.addEventListener('click', function () {
-  deck.flip()
-})
 
 
 deck.mount($container)

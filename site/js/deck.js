@@ -821,6 +821,70 @@ var Deck = (function () {
     }
   };
 
+
+
+  var split = {
+    deck: function deck(_deck) {
+      _deck.split = _deck.queued(split);
+  
+      function split(next) {
+        var cards = _deck.cards;
+        ___fontSize = fontSize();
+  
+        // fisherYates(cards);
+        cards.forEach(function (card) {
+          card.split(function (i) {
+            if (i === cards.length - 1) {
+              next();
+            }
+          });
+        });
+      }
+    },
+    card: function card(_card) {
+      var suit = _card.suit;
+  
+      _card.split = function (cb) {
+        var i = _card.i;
+        var delay = i * 10;
+        
+        // Calculate position based on suit
+        // 0: Hearts (North), 1: Clubs (West), 2: Diamonds (East), 3: Spades (South)
+        var positions = {
+          0: { x: 0, y: 240, rot: 0,  sx: -1, sy:0 },// Spades - South
+          1: { x: 240, y: 0, rot: -90, sx:0,sy:1 },    // Clubs - West
+          2: { x: -240, y: 0, rot: 90 ,sx:0,sy:-1},      // Hearts - East
+          3: { x: 0, y: -240, rot: 180 ,sx:1,sy:0}      // Dice - North
+        };
+  
+        // Get position for this card's suit
+        var position = positions[suit];
+        
+        // Add some spread within each suit based on card index
+        var spreadFactor = 0.3;  // Controls how much cards spread within their suit
+        var spreadX = ((i % 13) - 6) * spreadFactor * ___fontSize*3;
+        var spreadY = ((i % 13) - 6) * spreadFactor * ___fontSize*3;
+  
+        _card.animateTo({
+          delay: delay,
+          duration: 400,
+          
+          x: position.x + spreadX*position.sx,
+          y: position.y + spreadY*position.sy,
+          rot: position.rot,
+  
+          onComplete: function onComplete() {
+            cb(i);
+          }
+        });
+      };
+    }
+  };
+
+
+
+
+
   function queue(target) {
     var array = Array.prototype;
 
@@ -973,7 +1037,7 @@ var Deck = (function () {
   
   Deck.animationFrames = animationFrames;
   Deck.ease = ease;
-  Deck.modules = { bysuit: bysuit, fan: fan, intro: intro, poker: poker, shuffle: shuffle, sort: sort, flip: flip };
+  Deck.modules = { bysuit: bysuit, fan: fan, intro: intro, poker: poker, shuffle: shuffle, sort: sort, flip: flip, split:split };
   Deck.Card = _card;
   Deck.prefix = prefix;
   Deck.translate = translate;
