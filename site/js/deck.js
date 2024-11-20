@@ -847,6 +847,7 @@ var Deck = (function () {
       _card.split = function (cb) {
         var i = _card.i;
         var delay = i * 10;
+        var rot = (7 - _card.rank) * 2;
         
         // Calculate position based on suit
         // 0: Hearts (North), 1: Clubs (West), 2: Diamonds (East), 3: Spades (South)
@@ -862,16 +863,16 @@ var Deck = (function () {
         
         // Add some spread within each suit based on card index
         var spreadFactor = 0.3;  // Controls how much cards spread within their suit
-        var spreadX = ((i % 13) - 6) * spreadFactor * ___fontSize*3;
-        var spreadY = ((i % 13) - 6) * spreadFactor * ___fontSize*3;
+        var spreadX = ((i % 13) - 6) * spreadFactor * ___fontSize*5;
+        var spreadY = ((i % 13) - 6) * spreadFactor * ___fontSize*5;
   
         _card.animateTo({
           delay: delay,
           duration: 400,
           
-          x: position.x + spreadX*position.sx,
-          y: position.y + spreadY*position.sy,
-          rot: position.rot,
+          x: position.x +  ( Math.cos(deg2rad(rot+10))-0.5) *spreadX*position.sx + -3*Math.abs(position.x)*position.sx*((rot)),
+          y: position.y +  (Math.cos(deg2rad(rot+10))-0.5) *spreadY*position.sy + -3*Math.abs(position.y)*position.sy*((rot)),
+          rot: position.rot + rot,
   
           onComplete: function onComplete() {
             cb(i);
