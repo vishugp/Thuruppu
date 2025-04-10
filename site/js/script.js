@@ -11,8 +11,15 @@ var $container = document.getElementById('container')
 var $topbar = document.getElementById('topbar')
 
 var $header = document.createElement('h1')
-$header.textContent = "Vish Cards Playground"
+$header.textContent = "Vish Cards Playground (🚧 Work In Progress 🚧)"
 $topbar.appendChild($header)
+
+var $flip = document.createElement('button')
+$flip.textContent = 'Flip'
+$topbar.appendChild($flip)
+$flip.addEventListener('click', function () {
+  deck.flip()
+})
 
 var $sort = document.createElement('button')
 $sort.textContent = 'Sort'
@@ -44,12 +51,7 @@ $fan.addEventListener('click', function () {
   deck.fan()
 })
 
-var $flip = document.createElement('button')
-$flip.textContent = 'Flip'
-$topbar.appendChild($flip)
-$flip.addEventListener('click', function () {
-  deck.flip()
-})
+
 
 var $split = document.createElement('button')
 $split.textContent = '4 player split'
