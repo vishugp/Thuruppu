@@ -61,6 +61,13 @@ $split.addEventListener('click', function () {
   deck.split()
 })
 
+// Add button for random 4 player split
+var $randomSplit = document.createElement('button')
+$randomSplit.textContent = 'Random 4 player split'
+$topbar.appendChild($randomSplit)
+$randomSplit.addEventListener('click', function () {
+  deck.randomSplit()
+})
 
 
 var deck = Deck()

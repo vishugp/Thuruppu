@@ -1,3 +1,8 @@
+/**
+ * Deck.js - Card deck animation and logic module
+ * Provides card deck creation, shuffling, sorting, splitting, and animation for card games.
+ * Modular, event-driven, and supports custom layouts.
+ */
 'use strict';
 
 var Deck = (function () {
@@ -6,6 +11,9 @@ var Deck = (function () {
   var ticking;
   var animations = [];
 
+  /**
+   * Creates an animation frame sequence with start, progress, and end callbacks.
+   */
   function animationFrames(delay, duration) {
     var now = Date.now();
 
@@ -46,6 +54,9 @@ var Deck = (function () {
     return self;
   }
 
+  /**
+   * Main animation loop, processes all active animations.
+   */
   function tick() {
     var now = Date.now();
 
@@ -87,6 +98,9 @@ var Deck = (function () {
   var style = document.createElement('p').style;
   var memoized = {};
 
+  /**
+   * Returns the correct vendor-prefixed CSS property name for a given property.
+   */
   function prefix(param) {
     if (typeof memoized[param] !== 'undefined') {
       return memoized[param];
@@ -112,6 +126,9 @@ var Deck = (function () {
 
   var has3d;
 
+  /**
+   * Returns a CSS translate or translate3d string depending on 3D support.
+   */
   function translate(a, b, c) {
     typeof has3d !== 'undefined' || (has3d = check3d());
 
@@ -124,6 +141,9 @@ var Deck = (function () {
     }
   }
 
+  /**
+   * Checks if 3D transforms are supported on the current device.
+   */
   function check3d() {
     // I admit, this line is stealed from the great Velocity.js!
     // http://julian.com/research/velocity/
@@ -147,12 +167,24 @@ var Deck = (function () {
     return has3d;
   }
 
+  /**
+   * Creates a DOM element of the given type.
+   */
   function createElement(type) {
     return document.createElement(type);
   }
 
-  var maxZ = 52;
+  // Centralized constants
+  const DECK_SIZE = 52;
+  const JOKER_DECK_SIZE = 55;
+  const INITIAL_Z_INDEX = 52;
+  const SUIT_NAMES = ['spades', 'hearts', 'clubs', 'diamonds', 'joker'];
 
+  let maxZ = INITIAL_Z_INDEX;
+
+  /**
+   * Card factory: creates a card object with all properties, DOM, and methods.
+   */
   function _card(i) {
     var transform = prefix('transform');
 
@@ -287,11 +319,17 @@ var Deck = (function () {
 
     return self;
 
+    /**
+     * Adds a module to this card (if present).
+     */
     function addModule(module) {
       // add card module
       module.card && module.card(self);
     }
 
+    /**
+     * Handles mousedown/touchstart for dragging/flipping cards.
+     */
     function onMousedown(e) {
       var startPos = {};
       var pos = {};
@@ -321,6 +359,9 @@ var Deck = (function () {
       $el.style[transform] = translate(self.x + 'px', self.y + 'px') + (self.rot ? ' rotate(' + self.rot + 'deg)' : '');
       $el.style.zIndex = maxZ++;
 
+      /**
+       * Handles mouse/touch move events for dragging.
+       */
       function onMousemove(e) {
         if (!isDraggable) {
           // is not draggable, do nothing
@@ -338,6 +379,9 @@ var Deck = (function () {
         $el.style[transform] = translate(Math.round(self.x + pos.x - startPos.x) + 'px', Math.round(self.y + pos.y - startPos.y) + 'px') + (self.rot ? ' rotate(' + self.rot + 'deg)' : '');
       }
 
+      /**
+       * Handles mouse/touch up events for ending drag or flipping.
+       */
       function onMouseup(e) {
         if (isFlippable && Date.now() - starttime < 200) {
           // flip sides
@@ -361,6 +405,9 @@ var Deck = (function () {
       }
     }
 
+    /**
+     * Mounts the card to a DOM target.
+     */
     function mount(target) {
       // mount card to target (deck)
       target.appendChild($el);
@@ -368,12 +415,18 @@ var Deck = (function () {
       self.$root = target;
     }
 
+    /**
+     * Unmounts the card from its parent DOM node.
+     */
     function unmount() {
       // unmount from root (deck)
       self.$root && self.$root.removeChild($el);
       self.$root = null;
     }
 
+    /**
+     * Sets the card's visible side (front or back).
+     */
     function setSide(newSide) {
       // flip sides
       if (newSide === 'front') {
@@ -394,15 +447,24 @@ var Deck = (function () {
     }
   }
 
+  /**
+   * Returns the suit name string for a given suit index.
+   */
   function SuitName(suit) {
     // return suit name from suit value
-    return suit === 0 ? 'spades' : suit === 1 ? 'hearts' : suit === 2 ? 'clubs' : suit === 3 ? 'diamonds' : 'joker';
+    return SUIT_NAMES[suit] || 'joker';
   }
 
+  /**
+   * Adds an event listener to a DOM element.
+   */
   function addListener(target, name, listener) {
     target.addEventListener(name, listener);
   }
 
+  /**
+   * Removes an event listener from a DOM element.
+   */
   function removeListener(target, name, listener) {
     target.removeEventListener(name, listener);
   }
@@ -526,12 +588,18 @@ var Deck = (function () {
     }
   };
 
+  /**
+   * Returns a random plus or minus value times the input.
+   */
   function plusminus(value) {
     var plusminus = Math.round(Math.random()) ? -1 : 1;
 
     return plusminus * value;
   }
 
+  /**
+   * Shuffles an array in place using the Fisher-Yates algorithm.
+   */
   function fisherYates(array) {
     var rnd, temp;
 
@@ -545,6 +613,9 @@ var Deck = (function () {
     return array;
   }
 
+  /**
+   * Returns the current font size in pixels as a number.
+   */
   function fontSize() {
     return window.getComputedStyle(document.body).getPropertyValue('font-size').slice(0, -2);
   }
@@ -773,6 +844,9 @@ var Deck = (function () {
     }
   };
 
+  /**
+   * Converts degrees to radians.
+   */
   function deg2rad(degrees) {
     return degrees * Math.PI / 180;
   }
@@ -821,17 +895,26 @@ var Deck = (function () {
     }
   };
 
+  // Add constants for spread logic
+  const SPLIT_SPREAD_FACTOR = 0.3;
+  const SPLIT_SPREAD_CENTER = 6;
+  const SPLIT_SPREAD_SCALE = 5;
 
+  // Helper for split/randomSplit card spread calculation
+  function getSplitSpread(handIndex, fontSize) {
+    // Returns {spreadX, spreadY, rot}
+    var rot = (7 - handIndex) * 2;
+    var spreadX = (handIndex - SPLIT_SPREAD_CENTER) * SPLIT_SPREAD_FACTOR * fontSize * SPLIT_SPREAD_SCALE;
+    var spreadY = (handIndex - SPLIT_SPREAD_CENTER) * SPLIT_SPREAD_FACTOR * fontSize * SPLIT_SPREAD_SCALE;
+    return { spreadX, spreadY, rot };
+  }
 
   var split = {
     deck: function deck(_deck) {
       _deck.split = _deck.queued(split);
-  
       function split(next) {
         var cards = _deck.cards;
         ___fontSize = fontSize();
-  
-        // fisherYates(cards);
         cards.forEach(function (card) {
           card.split(function (i) {
             if (i === cards.length - 1) {
@@ -843,37 +926,25 @@ var Deck = (function () {
     },
     card: function card(_card) {
       var suit = _card.suit;
-  
       _card.split = function (cb) {
         var i = _card.i;
         var delay = i * 10;
-        var rot = (7 - _card.rank) * 2;
-        
-        // Calculate position based on suit
-        // 0: Hearts (North), 1: Clubs (West), 2: Diamonds (East), 3: Spades (South)
+        // 0: Spades (South), 1: Clubs (West), 2: Hearts (East), 3: Diamonds (North)
         var positions = {
-          0: { x: 0, y: 240, rot: 0,  sx: -1, sy:0 },// Spades - South
-          1: { x: 240, y: 0, rot: -90, sx:0,sy:1 },    // Clubs - West
-          2: { x: -240, y: 0, rot: 90 ,sx:0,sy:-1},      // Hearts - East
-          3: { x: 0, y: -240, rot: 180 ,sx:1,sy:0}      // Dice - North
+          0: { x: 0, y: 240, rot: 0,  sx: -1, sy:0 },    // Spades - South
+          1: { x: 240, y: 0, rot: -90, sx:0,sy:1 },       // Clubs - West
+          2: { x: -240, y: 0, rot: 90 ,sx:0,sy:-1},       // Hearts - East
+          3: { x: 0, y: -240, rot: 180 ,sx:1,sy:0}        // Diamonds - North
         };
-  
-        // Get position for this card's suit
         var position = positions[suit];
-        
-        // Add some spread within each suit based on card index
-        var spreadFactor = 0.3;  // Controls how much cards spread within their suit
-        var spreadX = ((i % 13) - 6) * spreadFactor * ___fontSize*5;
-        var spreadY = ((i % 13) - 6) * spreadFactor * ___fontSize*5;
-  
+        // Use helper for spread
+        var { spreadX, spreadY, rot } = getSplitSpread(i % 13, ___fontSize);
         _card.animateTo({
           delay: delay,
           duration: 400,
-          
           x: position.x +  ( Math.cos(deg2rad(rot+10))-0.5) *spreadX*position.sx + -3*Math.abs(position.x)*position.sx*((rot)),
           y: position.y +  (Math.cos(deg2rad(rot+10))-0.5) *spreadY*position.sy + -3*Math.abs(position.y)*position.sy*((rot)),
           rot: position.rot + rot,
-  
           onComplete: function onComplete() {
             cb(i);
           }
@@ -882,10 +953,84 @@ var Deck = (function () {
     }
   };
 
+/**
+ * randomSplit module: Randomizes the deck and spreads cards for 4 players (like split, but shuffled and not by suit).
+ */
+var randomSplit = {
+  deck: function deck(_deck) {
+    _deck.randomSplit = _deck.queued(randomSplit);
+    function randomSplit(next) {
+      var cards = _deck.cards;
+      ___fontSize = fontSize();
+      // Shuffle the cards
+      fisherYates(cards);
+      // Group cards by player
+      var hands = [[], [], [], []];
+      cards.forEach(function (card, i) {
+        var player = i % 4;
+        hands[player].push(card);
+        card.randomSplitPlayer = player;
+        card.randomSplitIndex = Math.floor(i / 4);
+      });
+      // Store hand sizes and indices for spread calculation
+      hands.forEach(function(hand, player) {
+        hand.forEach(function(card, j) {
+          card.randomSplitHandIndex = j;
+          card.randomSplitHandSize = hand.length;
+          // Removed unused: card.randomSplitSubIndex, card.randomSplitPlayerNumber
+        });
+      });
+      // Animate all cards
+      cards.forEach(function (card, i) {
+        card.randomSplit(function (j) {
+          if (j === cards.length - 1) {
+            next();
+          }
+        });
+      });
+    }
+  },
+  card: function card(_card) {
+    _card.randomSplit = function (cb) {
+      var i = _card.i;
+      var player = _card.randomSplitPlayer;
+      var handIndex = _card.randomSplitHandIndex;
+      var handSize = _card.randomSplitHandSize;
+      var delay = i * 10;
+      // Use the same spread logic as split, but by player/hand
+      var { spreadX, spreadY, rot } = getSplitSpread(handIndex, ___fontSize);
+      // 0: South, 1: West, 2: East, 3: North
+      var positions = {
+        0: { x: 0, y: 240, rot: 0,  sx: -1, sy:0 },    // South
+        1: { x: 240, y: 0, rot: -90, sx:0,sy:1 },       // West
+        2: { x: -240, y: 0, rot: 90 ,sx:0,sy:-1},       // East
+        3: { x: 0, y: -240, rot: 180 ,sx:1,sy:0}        // North
+      };
+      var position = positions[player];
+      _card.animateTo({
+        delay: delay,
+        duration: 400,
+        x: position.x +  ( Math.cos(deg2rad(rot+10))-0.5) *spreadX*position.sx + -3*Math.abs(position.x)*position.sx*((rot)),
+        y: position.y +  (Math.cos(deg2rad(rot+10))-0.5) *spreadY*position.sy + -3*Math.abs(position.y)*position.sy*((rot)),
+        rot: position.rot + rot,
+        onStart: function onStart() {
+          // Set z-index so cards are layered right-to-left (or bottom-to-top)
+          // For South/North: rightmost card = highest z; for West/East: bottommost = highest z
+          var z = handSize - 1 - handIndex;
+          _card.$el.style.zIndex = z;
+        },
+        onComplete: function onComplete() {
+          cb(i);
+        }
+      });
+    };
+  }
+};
 
 
-
-
+  /**
+   * Adds queueing/queued methods to an object for sequential actions.
+   */
   function queue(target) {
     var array = Array.prototype;
 
@@ -896,6 +1041,9 @@ var Deck = (function () {
 
     return target;
 
+    /**
+     * Wraps an action to be queued.
+     */
     function queued(action) {
       return function () {
         var self = this;
@@ -907,6 +1055,9 @@ var Deck = (function () {
       };
     }
 
+    /**
+     * Adds an action to the queue and starts processing if idle.
+     */
     function queue(action) {
       if (!action) {
         return;
@@ -918,6 +1069,9 @@ var Deck = (function () {
         next();
       }
     }
+    /**
+     * Processes the next action in the queue.
+     */
     function next() {
       queueing[0](function (err) {
         if (err) {
@@ -933,6 +1087,9 @@ var Deck = (function () {
     }
   }
 
+  /**
+   * Adds observable (event) methods to an object.
+   */
   function observable(target) {
     target || (target = {});
     var listeners = {};
@@ -944,11 +1101,17 @@ var Deck = (function () {
 
     return target;
 
+    /**
+     * Registers an event listener for the given event name.
+     */
     function on(name, cb, ctx) {
       listeners[name] || (listeners[name] = []);
       listeners[name].push({ cb: cb, ctx: ctx });
     }
 
+    /**
+     * Registers a one-time event listener for the given event name.
+     */
     function one(name, cb, ctx) {
       listeners[name] || (listeners[name] = []);
       listeners[name].push({
@@ -956,19 +1119,28 @@ var Deck = (function () {
       });
     }
 
+    /**
+     * Triggers all listeners for the given event name.
+     */
     function trigger(name) {
       var self = this;
       var args = Array.prototype.slice(arguments, 1);
 
       var currentListeners = listeners[name] || [];
 
-      currentListeners.filter(function (listener) {
-        listener.cb.apply(self, args);
-
+      currentListeners = currentListeners.filter(function (listener) {
+        try {
+          listener.cb.apply(self, args);
+        } catch (err) {
+          console.error('Error in event listener for', name, err);
+        }
         return !listener.once;
       });
     }
 
+    /**
+     * Removes event listeners for the given event name and/or callback.
+     */
     function off(name, cb) {
       if (!name) {
         listeners = {};
@@ -986,6 +1158,9 @@ var Deck = (function () {
     }
   }
 
+  /**
+   * Deck factory: creates a deck of cards, mounts/unmounts, and loads modules.
+   */
   function Deck(jokers) {
     // init cards array
     var cards = new Array(jokers ? 55 : 52);
@@ -1019,17 +1194,26 @@ var Deck = (function () {
 
     return self;
 
+    /**
+     * Mounts the deck to a DOM root element.
+     */
     function mount(root) {
       // mount deck to root
       $root = root;
       $root.appendChild($el);
     }
 
+    /**
+     * Unmounts the deck from its DOM root.
+     */
     function unmount() {
       // unmount deck from root
       $root.removeChild($el);
     }
 
+    /**
+     * Adds a module to the deck (if present).
+     */
     function addModule(module) {
       module.deck && module.deck(self);
     }
@@ -1038,7 +1222,8 @@ var Deck = (function () {
   
   Deck.animationFrames = animationFrames;
   Deck.ease = ease;
-  Deck.modules = { bysuit: bysuit, fan: fan, intro: intro, poker: poker, shuffle: shuffle, sort: sort, flip: flip, split:split };
+  // Register all modules, including randomSplit, in one place
+  Deck.modules = { bysuit: bysuit, fan: fan, intro: intro, poker: poker, shuffle: shuffle, sort: sort, flip: flip, split: split, randomSplit: randomSplit };
   Deck.Card = _card;
   Deck.prefix = prefix;
   Deck.translate = translate;
