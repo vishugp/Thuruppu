@@ -103,10 +103,11 @@
   const SPLIT_SPREAD_FACTOR = 1.7;
   const SPLIT_SPREAD_CENTER = 6;
 
-  function getSplitSpread(handIndex, fontSize) {
-    var rot = (7 - handIndex) * 2;
-    var spreadX = (handIndex - SPLIT_SPREAD_CENTER) * SPLIT_SPREAD_FACTOR * fontSize ;
-    var spreadY = (handIndex - SPLIT_SPREAD_CENTER) * SPLIT_SPREAD_FACTOR * fontSize;
+  function getSplitSpread(handIndex, handSize, fontSize) {
+    var center = Math.floor(handSize / 2);
+    var rot = (center - handIndex) * 2;
+    var spreadX = (handIndex - center) * SPLIT_SPREAD_FACTOR * fontSize;
+    var spreadY = (handIndex - center) * SPLIT_SPREAD_FACTOR * fontSize;
     return { spreadX, spreadY, rot };
   }
 
@@ -151,53 +152,69 @@
     return self;
   }
 
-     // Deck class
-   function Deck() {
-     var cards = [];
-     var $el = document.createElement('div');
-     var $root;
-     var playedCardZIndex = 10000; // Starting z-index for played cards
+           // Deck class
+    function Deck() {
+      var cards = [];
+      var $el = document.createElement('div');
+      var $root;
+      var playedCardZIndex = 10000; // Starting z-index for played cards
+      
+      // Configuration: Easy to change number of packs
+      var NUM_PACKS = 1; // Change to 1 for single pack, 2 for double pack
 
-         // Create cards
-     function createCards() {
-       for (var i = 0; i < 52; i++) {
-         var cardEl = document.createElement('div');
-         cardEl.className = 'card';
-         
-         var faceEl = document.createElement('div');
-         faceEl.className = 'face';
-         
-                   // Calculate suit and rank from index
-          var suit = Math.floor(i / 13);
-          var rank = (i % 13) + 1;
+      
+
+                                       // Create cards
+       function createCards() {
+                   // NUM_PACKS with filtered ranks: A, 9, 10, K, Q, J only
+          var t2Ranks = [1, 9, 10, 11, 12, 13]; // A, 9, 10, J, Q, K
           
-          // Add CSS classes for suit and rank
-          cardEl.classList.add(getSuitClass(suit));
-          cardEl.classList.add('rank' + rank);
           
-          // The CSS will handle the background image automatically
-         
-         var backEl = document.createElement('div');
-         backEl.className = 'back';
-         
-         cardEl.appendChild(faceEl);
-         $el.appendChild(cardEl);
-         
-         var card = Card(cardEl, i);
-         card.suit = suit;
-         card.rank = rank;
-         card.setSide = function(side) {
-           if (side === 'front') {
-             cardEl.removeChild(backEl);
-             cardEl.appendChild(faceEl);
-           } else {
-             cardEl.removeChild(faceEl);
-             cardEl.appendChild(backEl);
-           }
-         };
-         
-         cards.push(card);
-       }
+          
+          for (var pack = 0; pack < NUM_PACKS; pack++) {
+           for (var suit = 0; suit < 4; suit++) {
+             for (var rankIndex = 0; rankIndex < t2Ranks.length; rankIndex++) {
+               var rank = t2Ranks[rankIndex];
+               
+               var cardEl = document.createElement('div');
+               cardEl.className = 'card';
+               
+               var faceEl = document.createElement('div');
+               faceEl.className = 'face';
+               
+                               // Track the actual card index for 2 packs
+                var actualCardIndex = cards.length;
+             
+            // Add CSS classes for suit and rank
+            cardEl.classList.add(getSuitClass(suit));
+            cardEl.classList.add('rank' + rank);
+            
+            // The CSS will handle the background image automatically
+           
+           var backEl = document.createElement('div');
+           backEl.className = 'back';
+           
+           cardEl.appendChild(faceEl);
+           $el.appendChild(cardEl);
+           
+           var card = Card(cardEl, actualCardIndex);
+           card.suit = suit;
+           card.rank = rank;
+           card.pack = pack; // Track which pack this card belongs to
+           card.setSide = function(side) {
+             if (side === 'front') {
+               cardEl.removeChild(backEl);
+               cardEl.appendChild(faceEl);
+             } else {
+               cardEl.removeChild(faceEl);
+               cardEl.appendChild(backEl);
+             }
+           };
+           
+           cards.push(card);
+          }
+        }
+      }
      }
      
      // Helper functions for card display
@@ -214,14 +231,32 @@
         return symbols[suit];
       }
       
-      function getSuitClass(suit) {
-        var classes = ['spades', 'hearts', 'diamonds', 'clubs'];
-        return classes[suit];
-      }
+             function getSuitClass(suit) {
+         var classes = ['spades', 'hearts', 'diamonds', 'clubs'];
+         return classes[suit];
+       }
+       
+       // Card power values for sorting
+       function getCardPower(rank) {
+         if (rank === 11) return 3; // J
+         if (rank === 9) return 2;  // 9
+         if (rank === 1) return 1.1;  // A
+         if (rank === 10) return 0.9; // 10
+         if (rank === 13) return 0.11; // K
+         if (rank === 12) return 0; // Q
+         return 0;
+       }
 
     // Random Split functionality
     function randomSplit() {
       var _fontSize = fontSize();
+
+      var suitOrder = {
+        1: 0, // Hearts
+        0: 1, // Spades
+        2: 2, // Diamonds
+        3: 3  // Clubs
+      };
       
       // Shuffle cards
       fisherYates(cards);
@@ -235,13 +270,35 @@
         card.randomSplitIndex = Math.floor(i / 4);
       });
 
-      // Store hand sizes and indices
-      hands.forEach(function(hand, player) {
-        hand.forEach(function(card, j) {
-          card.randomSplitHandIndex = j;
-          card.randomSplitHandSize = hand.length;
+             // Sort each hand by card power (highest to lowest)
+       hands.forEach(function(hand, player) {
+         // Sort by power (highest first), then by suit for same power
+         hand.sort(function(a, b) {
+          var suitA = suitOrder[a.suit];
+          var suitB = suitOrder[b.suit];
+        
+          if (suitA !== suitB) {
+            return suitA - suitB; // Custom suit order: hearts > spades > diamonds > clubs
+          }
+        
+          var powerA = getCardPower(a.rank);
+          var powerB = getCardPower(b.rank);
+          return powerB - powerA; // Within same suit, sort by descending power
         });
-      });
+        
+         
+         // Update hand indices after sorting
+         hand.forEach(function(card, j) {
+           card.randomSplitHandIndex = j;
+           card.randomSplitHandSize = hand.length;
+         });
+         
+         // Log sorted hand for debugging
+         var handText = hand.map(function(card) {
+           return getRankText(card.rank) + getSuitSymbol(card.suit) + '(' + getCardPower(card.rank) + ')';
+         }).join(', ');
+         console.log('Player ' + (player + 1) + ' sorted hand:', handText);
+       });
 
       // Animate cards to positions
       cards.forEach(function(card, i) {
@@ -256,7 +313,7 @@
       var handSize = card.randomSplitHandSize;
       var delay = index * 10;
 
-      var { spreadX, spreadY, rot } = getSplitSpread(handIndex, fontSize());
+      var { spreadX, spreadY, rot } = getSplitSpread(handIndex, handSize, fontSize());
 
       // Position configurations
       var positions = {
