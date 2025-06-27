@@ -318,15 +318,19 @@
       // Position configurations
       var positions = {
         0: { x: 0, y: 240, rot: 0, sx: -1, sy: 0 },    // South
-        1: { x: 240, y: 0, rot: 90, sx: 0, sy: 1 },     // West
-        2: { x: -240, y: 0, rot: -90, sx: 0, sy: -1 },   // East
-        3: { x: 0, y: -240, rot: 180, sx: 1, sy: 0 }   // North
+        1: { x: 240, y: 0, rot: 0, sx: -1, sy: 0 },     // West
+        2: { x: -240, y: 0, rot: 0, sx: -1, sy: 0 },   // East
+        3: { x: 0, y: -240, rot: 0, sx: -1, sy: 0 }   // North
       };
 
       var position = positions[player];
-      var finalX = position.x + (Math.cos(deg2rad(rot)) - 0.5) * spreadX * position.sx + -3 * Math.abs(position.x) * position.sx * ((rot));
-      var finalY = position.y + (Math.cos(deg2rad(rot)) - 0.5) * spreadY * position.sy + -3 * Math.abs(position.y) * position.sy * ((rot)) - 20;
+      // var finalX = position.x + (Math.cos(deg2rad(rot)) - 0.5) * spreadX * position.sx + -3 * Math.abs(position.x) * position.sx * ((rot));
+      // var finalY = position.y + (Math.cos(deg2rad(rot)) - 0.5) * spreadY * position.sy + -3 * Math.abs(position.y) * position.sy * ((rot)) - 20;
       
+      var finalX = position.x + spreadX * position.sx * 0.5;
+      var finalY = position.y + spreadY * position.sy;
+
+
       // - Math.floor(card.randomSplitHandSize/2)
 
       finalX = finalX + 3*position.sy*Math.abs(0.5 - Math.abs(card.randomSplitHandIndex - Math.floor(card.randomSplitHandSize/2)))
@@ -336,7 +340,7 @@
         duration: 400,
         x: finalX,
         y: finalY,
-        rot: position.rot + rot,
+        rot: rot,
         onStart: function() {
           var z = handSize - 1 - handIndex;
           card.$el.style.zIndex = z;
@@ -364,11 +368,18 @@
       var isHovered = false;
       var isClicked = false;
 
+      // var moves = {
+      //   0: { x: 0, y: 30 },    // South
+      //   1: { x: 30, y: 0,},     // West
+      //   2: { x: -30, y: 0 },   // East
+      //   3: { x: 0, y: -30 }   // North
+      // };
+
       var moves = {
         0: { x: 0, y: 30 },    // South
-        1: { x: 30, y: 0,},     // West
-        2: { x: -30, y: 0 },   // East
-        3: { x: 0, y: -30 }   // North
+        1: { x: 0, y: 30 },     // West
+        2: { x: 0, y: 30 },   // East
+        3: { x: 0, y: 30 }   // North
       };
 
       var player = card.randomSplitPlayer;
@@ -410,7 +421,7 @@
             duration: 500,
             x: 0,
             y: 0,
-            rot: Math.random()*360,
+            rot: (playedCardZIndex - 10008)*30,
             onComplete: function() {
               console.log('Card played to center:', getRankText(card.rank) + getSuitSymbol(card.suit) + ' (Suit: ' + card.suit + ', Rank: ' + card.rank + ')');
               // Keep the card on top after playing
