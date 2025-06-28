@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vish Cards Playground</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <script src="{{ url_for('static', filename='js/animations.js') }}"></script>
+</head>
+<body>
+    <div id="topbar">
+        <h1>Vish Cards Playground</h1>
+        <button id="random-split">Random 4 Player Split</button>
+    </div>
+    <div id="container"></div>
+    <script>
+        document.getElementById('random-split').addEventListener('click', async () => {
+            const response = await fetch('/random_split', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await response.json();
+            console.log(data.logs.join('\n'));
+            const container = document.getElementById('container');
+            container.innerHTML = ''; // Clear existing cards
+            data.cards.forEach(card => {
+                const cardEl = window.createCard(card.index, card.suit_class, card.rank);
+                container.appendChild(cardEl);
+                window.animateCardToPosition(cardEl, card.player, card.hand_index, card.hand_size, card.index);
+            });
+        });
+
+        // Initialize with random split
+        window.addEventListener('DOMContentLoaded', async () => {
+            const response = await fetch('/random_split', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await response.json();
+            console.log(data.logs.join('\n'));
+            const container = document.getElementById('container');
+            data.cards.forEach(card => {
+                const cardEl = window.createCard(card.index, card.suit_class, card.rank);
+                container.appendChild(cardEl);
+                window.animateCardToPosition(cardEl, card.player, card.hand_index, card.hand_size, card.index);
+            });
+        });
+    </script>
+</body>
+</html>
