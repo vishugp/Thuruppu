@@ -317,17 +317,17 @@
 
       // Position configurations
       var positions = {
-        0: { x: 0, y: 240, rot: 0, sx: -1, sy: 0 },    // South
-        1: { x: 240, y: 0, rot: 0, sx: -1, sy: 0 },     // West
-        2: { x: -240, y: 0, rot: 0, sx: -1, sy: 0 },   // East
-        3: { x: 0, y: -240, rot: 0, sx: -1, sy: 0 }   // North
+        0: { x: 0, y: 210, rot: 0, sx: -1, sy: 0 },     // South (bottom) - cards face up
+        1: { x: -210, y: -30, rot: 90, sx: 0, sy: -1 },    // West (left) - cards face right
+        2: { x: 210, y: 0, rot: -90, sx: 0, sy: 1 },   // East (right) - cards face left
+        3: { x: 0, y: -210, rot: 180, sx: 1, sy: 0 }    // North (top) - cards face down
       };
 
       var position = positions[player];
       // var finalX = position.x + (Math.cos(deg2rad(rot)) - 0.5) * spreadX * position.sx + -3 * Math.abs(position.x) * position.sx * ((rot));
       // var finalY = position.y + (Math.cos(deg2rad(rot)) - 0.5) * spreadY * position.sy + -3 * Math.abs(position.y) * position.sy * ((rot)) - 20;
       
-      var finalX = position.x + spreadX * position.sx * 0.5;
+      var finalX = position.x + spreadX * position.sx;
       var finalY = position.y + spreadY * position.sy;
 
 
@@ -340,7 +340,7 @@
         duration: 400,
         x: finalX,
         y: finalY,
-        rot: rot,
+        rot: position.rot + rot,
         onStart: function() {
           var z = handSize - 1 - handIndex;
           card.$el.style.zIndex = z;
@@ -376,10 +376,10 @@
       // };
 
       var moves = {
-        0: { x: 0, y: 30 },    // South
-        1: { x: 0, y: 30 },     // West
-        2: { x: 0, y: 30 },   // East
-        3: { x: 0, y: 30 }   // North
+        0: { x: 0, y: 30 },     // South - lift up toward center
+        1: { x: -30, y: 0 },    // West - lift right toward center
+        2: { x: 30, y: 0 },     // East - lift left toward center
+        3: { x: 0, y: -30 }     // North - lift down toward center
       };
 
       var player = card.randomSplitPlayer;

@@ -134,28 +134,27 @@
     }
 
     // Global functions for client-side
-    window.createCard = function(index, suitClass, rank) {
+    window.createCard = function(cardId, suitClass, rank) {
         var cardEl = document.createElement('div');
         cardEl.className = 'card ' + suitClass + ' rank' + rank;
+        cardEl.dataset.cardId = cardId;
         var faceEl = document.createElement('div');
         faceEl.className = 'face';
         cardEl.appendChild(faceEl);
         return cardEl;
     };
 
-    var playedCardZIndex = 10000;
-
-    window.animateCardToPosition = function(cardEl, player, handIndex, handSize, index) {
+    window.animateCardToPosition = function(cardEl, player, handIndex, handSize, index, onReady) {
         var card = Card(cardEl);
         var delay = index * 10;
         var _fontSize = fontSize();
         var { spreadX, spreadY, rot } = getSplitSpread(handIndex, handSize, _fontSize);
 
         var positions = {
-            0: { x: 0, y: 240, rot: 0, sx: -1, sy: 0 }, // South
-            1: { x: 240, y: 0, rot: 0, sx: -1, sy: 0 },  // West
-            2: { x: -240, y: 0, rot: 0, sx: -1, sy: 0 }, // East
-            3: { x: 0, y: -240, rot: 0, sx: -1, sy: 0 }  // North
+            0: { x: 0, y: 240, rot: 0, sx: -1, sy: 0 },  // South (bottom)
+            1: { x: -240, y: 0, rot: 0, sx: -1, sy: 0 }, // West (left)
+            2: { x: 0, y: -240, rot: 0, sx: -1, sy: 0 }, // North (top)
+            3: { x: 240, y: 0, rot: 0, sx: -1, sy: 0 }   // East (right)
         };
 
         var position = positions[player];
@@ -164,63 +163,6 @@
         finalX = finalX + 3 * position.sy * Math.abs(0.5 - Math.abs(handIndex - Math.floor(handSize / 2)));
         finalY = finalY - 3 * position.sx * Math.abs(0.5 - Math.abs(handIndex - Math.floor(handSize / 2)));
 
-        var moves = {
-            0: { x: 0, y: 30 }, // South
-            1: { x: 0, y: 30 }, // West
-            2: { x: 0, y: 30 }, // East
-            3: { x: 0, y: 30 }  // North
-        };
-
-        var move = moves[player];
-        var originalZ = handSize - 1 - handIndex;
-        var finalRot = rot;
-        var isHovered = false;
-        var isClicked = false;
-
-        function onMouseEnter() {
-            if (isClicked) return;
-            isHovered = true;
-            card.$el.style.zIndex = '9999';
-            card.animateTo({
-                delay: 0,
-                duration: 200,
-                y: finalY - move.y,
-                x: finalX - move.x,
-                rot: finalRot
-            });
-        }
-
-        function onMouseLeave() {
-            if (isClicked) return;
-            isHovered = false;
-            card.$el.style.zIndex = originalZ;
-            card.animateTo({
-                delay: 0,
-                duration: 200,
-                y: finalY,
-                x: finalX,
-                rot: finalRot
-            });
-        }
-
-        function onClick() {
-            if (isClicked) return;
-            isClicked = true;
-            playedCardZIndex++;
-            card.$el.style.zIndex = playedCardZIndex;
-            card.animateTo({
-                delay: 0,
-                duration: 500,
-                x: 0,
-                y: 0,
-                rot: (playedCardZIndex - 10008) * 30
-            });
-        }
-
-        card.$el.addEventListener('mouseenter', onMouseEnter);
-        card.$el.addEventListener('mouseleave', onMouseLeave);
-        card.$el.addEventListener('click', onClick);
-
         card.animateTo({
             delay: delay,
             duration: 400,
@@ -228,12 +170,30 @@
             y: finalY,
             rot: rot,
             onStart: function() {
-                card.$el.style.zIndex = originalZ;
+                var z = handSize - 1 - handIndex;
+                card.$el.style.zIndex = z;
             },
             onComplete: function() {
-                card._randomSplitFinalX = finalX;
-                card._randomSplitFinalY = finalY;
-                card._randomSplitFinalRot = finalRot;
+                if (onReady) onReady(card.$el);
+            }
+        });
+    };
+
+    window.animateCardElement = function(cardEl, toX, toY, toRot, duration, onComplete) {
+        var card = Card(cardEl);
+        var match = cardEl.style.transform.match(/translate\(([^,]+)px,\s*([^)]+)px\)/);
+        if (match) {
+            card.x = parseFloat(match[1]);
+            card.y = parseFloat(match[2]);
+        }
+        card.animateTo({
+            delay: 0,
+            duration: duration || 400,
+            x: toX,
+            y: toY,
+            rot: toRot !== undefined ? toRot : card.rot,
+            onComplete: function() {
+                if (onComplete) onComplete(card.$el);
             }
         });
     };

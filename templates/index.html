@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thuruppu - The Trump Card Game</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <script src="{{ url_for('static', filename='js/animations.js') }}"></script>
+    <style>
+        .card.playable { cursor: pointer; }
+        .card.playable:hover { filter: brightness(0.9); }
+        .card.played { pointer-events: none; }
+        #controls { margin-left: auto; display: flex; gap: 0.3rem; }
+        #trick-area {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 500;
+            pointer-events: none;
+        }
+        .trick-card {
+            position: absolute;
+        }
+        #next-btn {
+            position: fixed;
+            top: 60%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 0.5rem 1.5rem;
+            font-size: 0.9rem;
+            background: #092493;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            z-index: 2000;
+            display: none;
+        }
+        #next-btn:hover { background: #061a6e; }
+    </style>
+</head>
+<body>
+    <div id="topbar">
+        <h1>Thuruppu - 28</h1>
+        <div id="controls">
+            <button id="btn-deal">Deal</button>
+            <button id="btn-new">New Game</button>
+        </div>
+    </div>
+    <div id="scorebar">
+        <span class="score team1">Red Team: <span id="score-team1">0</span></span>
+        <span class="score team2">Blue Team: <span id="score-team2">0</span></span>
+        <span class="turn" id="turn-indicator">Turn: -</span>
+        <span class="trump" id="trump-indicator">Trump: -</span>
+    </div>
+    <div id="message"></div>
+    <button id="next-btn">Next Trick</button>
+
+    <div id="trump-picker" style="display:none">
+        <h2>Choose Trump &amp; Bid</h2>
+        <p id="bid-info">Which team calls trump?</p>
+        <div style="margin-bottom: 0.5rem;">
+            <label><input type="radio" name="caller-team" value="0" checked> Red Team calls</label>
+            <label><input type="radio" name="caller-team" value="1"> Blue Team calls</label>
+        </div>
+        <div class="bid-row">
+            <label>Expected score:</label>
+            <input type="number" id="bid-score" value="3" min="1" max="28">
+        </div>
+        <p style="margin-top: 0.5rem; font-size: 0.8rem; color: #666;">Select trump suit:</p>
+        <div class="suits">
+            <button onclick="pickTrump(0)">♠</button>
+            <button onclick="pickTrump(1)">♥</button>
+            <button onclick="pickTrump(2)">♦</button>
+            <button onclick="pickTrump(3)">♣</button>
+        </div>
+    </div>
+    <div id="container"></div>
+
+    <script>
+        var PLAYER_NAMES = ["South", "West", "North", "East"];
+        var TEAM_NAMES = ["Red Team", "Blue Team"];
+        var SUIT_SYMBOLS = ['\u2660', '\u2665', '\u2666', '\u2663'];
+        var cardMap = {};
+        var lastState = null;
+        var prevScores = [0, 0];
+        var animatingCards = {};
+        var container = document.getElementById('container');
+
+        function createPlayerLabels() {
+            var labels = [
+                { text: 'South (You)', pos: 'bottom-3rem', idx: 0 },
+                { text: 'West', pos: 'left-6rem', idx: 1 },
+                { text: 'North', pos: 'top-3rem', idx: 2 },
+                { text: 'East', pos: 'right-6rem', idx: 3 }
+            ];
+            labels.forEach(function(l) {
+                var el = document.createElement('div');
+                el.className = 'player-label';
+                el.id = 'plabel-' + l.idx;
+                el.textContent = l.text;
+                el.style.cssText = l.pos.split('-')[0] + ': ' + l.pos.split('-')[1];
+                // Use fixed positioning relative to center
+                switch (l.idx) {
+                    case 0: el.style.cssText = 'bottom: 0.5rem; left: 50%; transform: translateX(-50%);'; break;
+                    case 1: el.style.cssText = 'top: 50%; left: 0.5rem; transform: translateY(-50%);'; break;
+                    case 2: el.style.cssText = 'top: 3rem; left: 50%; transform: translateX(-50%);'; break;
+                    case 3: el.style.cssText = 'top: 50%; right: 0.5rem; transform: translateY(-50%);'; break;
+                }
+                document.body.appendChild(el);
+            });
+        }
+        createPlayerLabels();
+
+        async function deal() {
+            container.innerHTML = '';
+            cardMap = {};
+            prevScores = [0, 0];
+            document.querySelectorAll('.player-label').forEach(function(el) { el.style.display = 'block'; });
+            var res = await fetch('/game/deal', { method: 'POST' });
+            var state = await res.json();
+            applyState(state);
+        }
+
+        async function pickTrump(suit) {
+            var caller = parseInt(document.querySelector('input[name="caller-team"]:checked').value);
+            var expected = parseInt(document.getElementById('bid-score').value) || 3;
+            var res = await fetch('/game/trump', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ suit: suit, caller: caller, expected: expected })
+            });
+            var state = await res.json();
+            applyState(state);
+        }
+
+        async function playCard(cardId, player) {
+            var entry = cardMap[cardId];
+            if (!entry) return;
+
+            // Animate card from hand to center immediately
+            var trickIdx = lastState && lastState.current_trick ? lastState.current_trick.length : 0;
+            var tx = (trickIdx - 1.5) * 65;
+            var el = entry.el;
+            el.style.zIndex = 10000 + trickIdx;
+            animatingCards[cardId] = true;
+
+            window.animateCardElement(el, tx, 0, 0, 350, function() {
+                el.classList.add('played');
+                animatingCards[cardId] = false;
+            });
+
+            // Fetch result
+            var res = await fetch('/game/play', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ player: player, card_id: cardId })
+            });
+            var result = await res.json();
+            if (result.error) {
+                document.getElementById('message').textContent = result.error;
+                return;
+            }
+            applyState(result.state, result.completed_trick);
+        }
+
+        function applyState(state, completedTrick) {
+            if (!state) return;
+            lastState = state;
+
+            // Scores with pop animation on change
+            var s1 = document.getElementById('score-team1');
+            var s2 = document.getElementById('score-team2');
+            var newScores = [state.team_scores[0], state.team_scores[1]];
+            s1.textContent = newScores[0].toFixed(0) + ' (Rd: ' + state.round_scores[0].toFixed(0) + ')';
+            s2.textContent = newScores[1].toFixed(0) + ' (Rd: ' + state.round_scores[1].toFixed(0) + ')';
+            if (newScores[0] !== prevScores[0]) { s1.classList.remove('score-pop'); void s1.offsetWidth; s1.classList.add('score-pop'); }
+            if (newScores[1] !== prevScores[1]) { s2.classList.remove('score-pop'); void s2.offsetWidth; s2.classList.add('score-pop'); }
+            prevScores = newScores;
+
+            // Trump info
+            var trumpEl = document.getElementById('trump-indicator');
+            if (state.trump_name) {
+                var callerInfo = '';
+                if (state.trump_caller !== null && state.trump_caller !== undefined) {
+                    var teamIdx = state.trump_team;
+                    callerInfo = ' | ' + TEAM_NAMES[teamIdx] + ' bid ' + state.expected_score;
+                }
+                trumpEl.innerHTML = state.trump_symbol + ' ' + state.trump_name + callerInfo;
+            } else {
+                trumpEl.textContent = 'Trump: -';
+            }
+
+            // Turn indicator
+            var turnEl = document.getElementById('turn-indicator');
+            if (state.phase === 'playing') {
+                turnEl.textContent = 'Turn: ' + PLAYER_NAMES[state.current_player];
+                document.querySelectorAll('.player-label').forEach(function(el, i) {
+                    el.style.color = i === state.current_player ? '#ffd54f' : 'rgba(255,255,255,0.5)';
+                    el.style.fontWeight = i === state.current_player ? 'bold' : 'normal';
+                });
+            } else if (state.phase === 'pick_trump') {
+                turnEl.textContent = 'Choose trump';
+            } else {
+                turnEl.textContent = 'Phase: ' + state.phase;
+            }
+
+            // Message
+            var msgEl = document.getElementById('message');
+            msgEl.textContent = state.message || '';
+            msgEl.classList.toggle('winner-msg', state.phase === 'game_over');
+
+            // Trump picker
+            var picker = document.getElementById('trump-picker');
+            picker.style.display = state.phase === 'pick_trump' ? 'block' : 'none';
+
+            if (state.phase === 'game_over') {
+                msgEl.textContent = 'Game Over! ' + TEAM_NAMES[state.winner] + ' wins!';
+                document.querySelectorAll('.player-label').forEach(function(el) { el.style.display = 'none'; });
+            }
+
+            var activeIds = new Set();
+
+            function setClickable(el, cardId, player, isActive) {
+                el.classList.remove('playable');
+                el.onclick = null;
+                if (isActive) {
+                    el.classList.add('playable');
+                    el.onclick = function() { playCard(cardId, player); };
+                }
+            }
+
+            // --- Sync hand cards ---
+            state.hands.forEach(function(hand, player) {
+                hand.forEach(function(card, idx) {
+                    activeIds.add(card.card_id);
+                    if (cardMap[card.card_id]) {
+                        var entry = cardMap[card.card_id];
+                        entry.handIndex = idx;
+                        entry.player = player;
+                        var isActive = state.phase === 'playing' && player === state.current_player;
+                        setClickable(entry.el, card.card_id, player, isActive);
+                    } else {
+                        var el = window.createCard(card.card_id, card.suit_class, card.rank);
+                        el.classList.add(player % 2 === 0 ? 'team-red' : 'team-blue');
+                        container.appendChild(el);
+                        window.animateCardToPosition(el, player, idx, hand.length, idx + player * 100, function(el) {
+                            var isActive = state.phase === 'playing' && player === state.current_player;
+                            setClickable(el, card.card_id, player, isActive);
+                        });
+                        cardMap[card.card_id] = { el: el, player: player, handIndex: idx };
+                    }
+                });
+            });
+
+            // --- Sync trick cards (inline in container) ---
+            var trickCards = completedTrick || state.current_trick || [];
+            // Highlight winner if completed trick
+            var winnerPlayer = completedTrick && completedTrick.length === 4 && completedTrick[3] ? completedTrick[3][0] : -1;
+
+            trickCards.forEach(function(item, idx) {
+                var playerIdx = item[0];
+                var c = item[1];
+                activeIds.add(c.card_id);
+                var tx = (idx - 1.5) * 65;
+
+                if (cardMap[c.card_id]) {
+                    // Card was animated from hand — reuse it
+                    var entry = cardMap[c.card_id];
+                    var el = entry.el;
+                    el.classList.remove('playable');
+                    el.onclick = null;
+                    el.style.transform = 'translate(' + tx + 'px, 0px) rotate(0deg)';
+                    el.style.zIndex = 10000 + idx;
+                    el.classList.add('played');
+                    if (playerIdx === winnerPlayer) {
+                        el.classList.add('trick-winner');
+                    } else {
+                        el.classList.remove('trick-winner');
+                    }
+                } else {
+                    // New trick card (e.g. after Continue)
+                    var el = window.createCard(c.card_id, c.suit_class, c.rank);
+                    el.classList.add(playerIdx % 2 === 0 ? 'team-red' : 'team-blue');
+                    el.classList.add('played');
+                    el.style.transform = 'translate(' + tx + 'px, 0px) rotate(0deg)';
+                    el.style.zIndex = 10000 + idx;
+                    container.appendChild(el);
+                    if (playerIdx === winnerPlayer) {
+                        el.classList.add('trick-winner');
+                    }
+                    cardMap[c.card_id] = { el: el, player: -1, handIndex: -1 };
+                }
+            });
+
+            // --- Remove orphaned cards (skip animating ones) ---
+            for (var cid in cardMap) {
+                if (!activeIds.has(cid) && !animatingCards[cid]) {
+                    var entry = cardMap[cid];
+                    if (entry.el && entry.el.parentNode) {
+                        entry.el.classList.add('exit');
+                        setTimeout(function(el) {
+                            if (el && el.parentNode) el.remove();
+                        }, 300, entry.el);
+                    }
+                    delete cardMap[cid];
+                }
+            }
+
+            // --- "Continue" button ---
+            var nextBtn = document.getElementById('next-btn');
+            var hasCompletedTrick = completedTrick && completedTrick.length === 4;
+            var trickJustEnded = hasCompletedTrick && (!state.current_trick || state.current_trick.length === 0);
+            if (trickJustEnded && state.phase === 'playing') {
+                nextBtn.style.display = 'block';
+                nextBtn.className = 'show';
+                nextBtn.textContent = 'Next Trick \u25B6';
+                nextBtn.onclick = function() {
+                    nextBtn.style.display = 'none';
+                    // Remove trick cards with fade
+                    var toRemove = [];
+                    for (var cid in cardMap) {
+                        if (cardMap[cid].player === -1) {
+                            var el = cardMap[cid].el;
+                            el.classList.add('exit');
+                            toRemove.push(cid);
+                        }
+                    }
+                    setTimeout(function() {
+                        toRemove.forEach(function(cid) {
+                            if (cardMap[cid]) {
+                                if (cardMap[cid].el && cardMap[cid].el.parentNode) cardMap[cid].el.remove();
+                                delete cardMap[cid];
+                            }
+                        });
+                        fetch('/game/state').then(function(r) { return r.json(); }).then(function(s) {
+                            applyState(s);
+                        });
+                    }, 300);
+                };
+            } else {
+                nextBtn.style.display = 'none';
+            }
+        }
+
+        document.getElementById('btn-deal').addEventListener('click', deal);
+        document.getElementById('btn-new').addEventListener('click', async function() {
+            await fetch('/game/new', { method: 'POST' });
+            deal();
+        });
+
+        window.addEventListener('DOMContentLoaded', deal);
+    </script>
+</body>
+</html>
