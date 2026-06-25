@@ -11,7 +11,6 @@ RANK_NAMES = {1: "A", 9: "9", 10: "10", 11: "J", 12: "Q", 13: "K"}
 CARD_POWERS = {11: 3, 9: 2, 1: 1.0001, 10: 1, 13: 0.0001, 12: 0}
 PLAYER_NAMES = ["South", "West", "North", "East"]
 TEAM_NAMES = ["Red Team", "Blue Team"]
-TEAM_SIZE = 28
 
 class Card:
     def __init__(self, suit, rank, card_id):
@@ -43,12 +42,14 @@ class Card:
         }
 
 
-def create_deck():
+def create_deck(packs=1):
     cards = []
     t2_ranks = [1, 9, 10, 11, 12, 13]
-    for suit in range(4):
-        for rank in t2_ranks:
-            cards.append(Card(suit, rank, f"{suit}_{rank}"))
+    for pack in range(packs):
+        for suit in range(4):
+            for rank in t2_ranks:
+                cid = f"{suit}_{rank}_{pack}" if packs > 1 else f"{suit}_{rank}"
+                cards.append(Card(suit, rank, cid))
     return cards
 
 
@@ -95,10 +96,11 @@ class Trick:
 class Game:
     def __init__(self):
         self.game_id = str(uuid.uuid4())[:8]
+        self.packs = 1
         self.reset()
 
     def reset(self):
-        self.cards = create_deck()
+        self.cards = create_deck(self.packs)
         self.hands = [[], [], [], []]
         self.trump_suit = None
         self.current_player = 0
@@ -109,24 +111,31 @@ class Game:
         self.phase = "dealing"  # dealing, bidding, pick_trump, playing, round_over, game_over
         self.led_player = 0
         self.trick_number = 0
+        self.total_tricks = 0
         self.winner = None
         self.message = ""
         self.trump_caller = None
         self.trump_team = None
         self.expected_score = 0
 
-    def deal(self):
+    def deal(self, packs=None):
+        if packs is not None:
+            self.packs = packs
         self.reset()
         shuffle(self.cards)
         for i, card in enumerate(self.cards):
             player = i % 4
             self.hands[player].append(card)
-        suit_order = {1: 0, 0: 1, 2: 2, 3: 3}  # Hearts, Spades, Diamonds, Clubs
+        suit_order = {0: 0, 2: 1, 3: 2, 1: 3}  # Spades, Diamonds, Clubs, Hearts
         for hand in self.hands:
             hand.sort(key=lambda c: (suit_order[c.suit], -c.get_power()))
+        self.total_tricks = len(self.cards) // 4
         self.phase = "pick_trump"
         self.message = "Pick the trump suit"
         return self.get_state()
+
+    def get_team_size(self):
+        return self.packs * 28
 
     def set_trump(self, suit, caller=None, expected=None):
         self.trump_suit = suit
@@ -140,7 +149,7 @@ class Game:
         self.current_trick_cards = []
         caller_name = PLAYER_NAMES[self.trump_caller]
         team_name = TEAM_NAMES[self.trump_team]
-        self.message = f"Trump: {SUIT_NAMES[suit]} ({SUIT_SYMBOLS[suit]}) | Called by {caller_name} ({team_name}) | Need {self.expected_score} pts"
+        self.message = f"Trump: {SUIT_NAMES[suit]} ({SUIT_SYMBOLS[suit]}) | {caller_name} ({team_name}) bids {self.expected_score}/{self.get_team_size()}"
         return self.get_state()
 
     def get_player_name(self, player):
@@ -186,7 +195,7 @@ class Game:
         trick_str = " ".join(f"{c.get_rank_text()}{c.get_suit_symbol()}" for _, c in self.current_trick_cards)
         winner_name = PLAYER_NAMES[winner]
 
-        if self.trick_number >= 6:
+        if self.trick_number >= self.total_tricks:
             self.phase = "round_over"
             self.team_scores[0] += self.round_scores[0]
             self.team_scores[1] += self.round_scores[1]
@@ -195,12 +204,13 @@ class Game:
             caller_met_bid = self.expected_score is not None and self.round_scores[caller_team] >= self.expected_score
             bid_status = "MADE bid" if caller_met_bid else "MISSED bid"
 
-            if self.team_scores[caller_team] >= TEAM_SIZE:
+            if self.team_scores[caller_team] >= self.get_team_size():
                 self.phase = "game_over"
                 self.winner = caller_team
                 self.message = f"Game over! {TEAM_NAMES[caller_team]} wins!"
             else:
-                self.message = f"Round over! {TEAM_NAMES[caller_team]} {bid_status} (needed {self.expected_score:.0f}, got {self.round_scores[caller_team]:.0f}) | Scores: {TEAM_NAMES[0]}={self.team_scores[0]:.0f}, {TEAM_NAMES[1]}={self.team_scores[1]:.0f}"
+                ts = self.get_team_size()
+                self.message = f"Round over! {TEAM_NAMES[caller_team]} {bid_status} (needed {self.expected_score:.0f}, got {self.round_scores[caller_team]:.0f}) | {TEAM_NAMES[0]}={self.team_scores[0]:.0f}/{ts} {TEAM_NAMES[1]}={self.team_scores[1]:.0f}/{ts}"
             self.current_trick_cards = []
         else:
             self.current_trick_cards = []
@@ -248,7 +258,9 @@ class Game:
             "winner": self.winner,
             "trump_caller": self.trump_caller,
             "trump_team": self.trump_team,
-            "expected_score": self.expected_score
+            "expected_score": self.expected_score,
+            "total_tricks": self.total_tricks,
+            "packs": self.packs
         }
 
 
@@ -262,7 +274,9 @@ def index():
 
 @app.route('/game/deal', methods=['POST'])
 def deal():
-    state = game.deal()
+    data = request.get_json() or {}
+    packs = data.get('packs', 1)
+    state = game.deal(packs=packs)
     return jsonify(state)
 
 

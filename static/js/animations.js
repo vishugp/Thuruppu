@@ -83,14 +83,15 @@
     }
 
     // Spread calculation constants
-    const SPLIT_SPREAD_FACTOR = 1.7;
+    const SPLIT_SPREAD_FACTOR = 2.5;
     const SPLIT_SPREAD_CENTER = 6;
 
     function getSplitSpread(handIndex, handSize, fontSize) {
-        var center = Math.floor(handSize / 2);
-        var rot = (center - handIndex) * 2;
-        var spreadX = (handIndex - center) * SPLIT_SPREAD_FACTOR * fontSize;
-        var spreadY = (handIndex - center) * SPLIT_SPREAD_FACTOR * fontSize;
+        var rotCenter = Math.floor(handSize / 2);
+        var spreadCenter = (handSize - 1) / 2;
+        var rot = (rotCenter - handIndex) * 2;
+        var spreadX = (handIndex - spreadCenter) * SPLIT_SPREAD_FACTOR * fontSize;
+        var spreadY = (handIndex - spreadCenter) * SPLIT_SPREAD_FACTOR * fontSize;
         return { spreadX, spreadY, rot };
     }
 
@@ -146,22 +147,28 @@
 
     window.animateCardToPosition = function(cardEl, player, handIndex, handSize, index, onReady) {
         var card = Card(cardEl);
+        var match = cardEl.style.transform.match(/translate\(([^,]+)px,\s*([^)]+)px\).*rotate\(([^)]+)\)/);
+        if (match) {
+            card.x = parseFloat(match[1]);
+            card.y = parseFloat(match[2]);
+            card.rot = parseFloat(match[3]) || 0;
+        }
         var delay = index * 10;
         var _fontSize = fontSize();
         var { spreadX, spreadY, rot } = getSplitSpread(handIndex, handSize, _fontSize);
 
         var positions = {
-            0: { x: 0, y: 240, rot: 0, sx: -1, sy: 0 },  // South (bottom)
-            1: { x: -240, y: 0, rot: 0, sx: -1, sy: 0 }, // West (left)
-            2: { x: 0, y: -240, rot: 0, sx: -1, sy: 0 }, // North (top)
-            3: { x: 240, y: 0, rot: 0, sx: -1, sy: 0 }   // East (right)
+            0: { x: 0, y: 210, rot: 0, sx: -1, sy: 0 },  // South (bottom)
+            1: { x: -350, y: 0, rot: 0, sx: -1, sy: 0 }, // West (left)
+            2: { x: 0, y: -180, rot: 0, sx: -1, sy: 0 }, // North (top)
+            3: { x: 350, y: 0, rot: 0, sx: -1, sy: 0 }   // East (right)
         };
-
         var position = positions[player];
         var finalX = position.x + spreadX * position.sx * 0.5;
         var finalY = position.y + spreadY * position.sy;
         finalX = finalX + 3 * position.sy * Math.abs(0.5 - Math.abs(handIndex - Math.floor(handSize / 2)));
         finalY = finalY - 3 * position.sx * Math.abs(0.5 - Math.abs(handIndex - Math.floor(handSize / 2)));
+
 
         card.animateTo({
             delay: delay,
@@ -174,8 +181,79 @@
                 card.$el.style.zIndex = z;
             },
             onComplete: function() {
+                cardEl.dataset.origX = card.x;
+                cardEl.dataset.origY = card.y;
+                cardEl.dataset.origRot = card.rot;
+                cardEl.dataset.origZ = card.$el.style.zIndex;
                 if (onReady) onReady(card.$el);
             }
+        });
+    };
+
+    window.spreadCardsHorizontally = function(player, cardEls, onComplete) {
+        if (!cardEls || !cardEls.length) return;
+        var count = cardEls.length;
+        var positions = {
+            0: { bx: 0, by: 240, axis: 'x' },
+            1: { bx: -350, by: 0, axis: 'y' },
+            2: { bx: 0, by: -240, axis: 'x' },
+            3: { bx: 350, by: 0, axis: 'y' }
+        };
+        var p = positions[player];
+        var spacing = Math.min(65, 500 / count);
+        var start = -(count - 1) * spacing / 2;
+        cardEls.forEach(function(el, i) {
+            var card = Card(el);
+            var match = el.style.transform.match(/translate\(([^,]+)px,\s*([^)]+)px\).*rotate\(([^)]+)\)/);
+            if (match) {
+                card.x = parseFloat(match[1]);
+                card.y = parseFloat(match[2]);
+                card.rot = parseFloat(match[3]) || 0;
+            }
+            var targetX = p.axis === 'x' ? p.bx + start + i * spacing : p.bx;
+            var targetY = p.axis === 'y' ? p.by + start + i * spacing : p.by;
+            card.animateTo({
+                delay: i * 15,
+                duration: 350,
+                x: targetX,
+                y: targetY,
+                rot: 0,
+                onStart: function() {
+                    el.style.zIndex = i;
+                },
+                onComplete: function() {
+                    if (i === count - 1 && onComplete) onComplete();
+                }
+            });
+        });
+    };
+
+    window.restoreCardPositions = function(cardEls, onComplete) {
+        if (!cardEls || !cardEls.length) return;
+        cardEls.forEach(function(el, i) {
+            var ox = parseFloat(el.dataset.origX) || 0;
+            var oy = parseFloat(el.dataset.origY) || 0;
+            var orot = parseFloat(el.dataset.origRot) || 0;
+            var oz = el.dataset.origZ || (cardEls.length - 1 - i);
+            var card = Card(el);
+            var match = el.style.transform.match(/translate\(([^,]+)px,\s*([^)]+)px\)/);
+            if (match) {
+                card.x = parseFloat(match[1]);
+                card.y = parseFloat(match[2]);
+            }
+            card.animateTo({
+                delay: i * 15,
+                duration: 350,
+                x: ox,
+                y: oy,
+                rot: orot,
+                onStart: function() {
+                    el.style.zIndex = oz;
+                },
+                onComplete: function() {
+                    if (i === cardEls.length - 1 && onComplete) onComplete();
+                }
+            });
         });
     };
 

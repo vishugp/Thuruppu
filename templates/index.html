@@ -9,6 +9,7 @@
     <style>
         .card.playable { cursor: pointer; }
         .card.playable:hover { filter: brightness(0.9); }
+        .card.not-playable { opacity: 0.5; cursor: not-allowed; }
         .card.played { pointer-events: none; }
         #controls { margin-left: auto; display: flex; gap: 0.3rem; }
         #trick-area {
@@ -38,14 +39,24 @@
             display: none;
         }
         #next-btn:hover { background: #061a6e; }
+        #deck-toggle { margin-left: 0.5rem; display: flex; gap: 0.2rem; }
+        .deck-btn {
+            background: none; border: 1px solid rgba(255,255,255,0.4); border-radius: 4px;
+            color: rgba(255,255,255,0.6); padding: 0.2rem 0.4rem; font-size: 0.65rem; cursor: pointer;
+        }
+        .deck-btn.active { background: rgba(255,255,255,0.2); color: #ffd54f; border-color: #ffd54f; }
     </style>
 </head>
 <body>
     <div id="topbar">
         <h1>Thuruppu - 28</h1>
+        <span id="topmsg"></span>
         <div id="controls">
             <button id="btn-deal">Deal</button>
-            <button id="btn-new">New Game</button>
+            <span id="deck-toggle">
+                <button class="deck-btn active" data-packs="1">28</button>
+                <button class="deck-btn" data-packs="2">56</button>
+            </span>
         </div>
     </div>
     <div id="scorebar">
@@ -61,14 +72,16 @@
         <h2>Choose Trump &amp; Bid</h2>
         <p id="bid-info">Which team calls trump?</p>
         <div style="margin-bottom: 0.5rem;">
-            <label><input type="radio" name="caller-team" value="0" checked> Red Team calls</label>
-            <label><input type="radio" name="caller-team" value="1"> Blue Team calls</label>
+            <label><input type="radio" name="caller-team" value="0" checked> Red Team </label>
+            <label><input type="radio" name="caller-team" value="1"> Blue Team</label><br>
+            <label>Bid:</label>
+            <input type="number" id="bid-score" value="14" min="14" max="28">
         </div>
-        <div class="bid-row">
+        <!-- <div class="bid-row">
             <label>Expected score:</label>
-            <input type="number" id="bid-score" value="3" min="1" max="28">
-        </div>
-        <p style="margin-top: 0.5rem; font-size: 0.8rem; color: #666;">Select trump suit:</p>
+            <input type="number" id="bid-score" value="14" min="14" max="28">
+        </div> -->
+        <!-- <p style="margin-top: 0.5rem; font-size: 0.8rem; color: #666;">Select trump suit:</p> -->
         <div class="suits">
             <button onclick="pickTrump(0)">♠</button>
             <button onclick="pickTrump(1)">♥</button>
@@ -76,7 +89,9 @@
             <button onclick="pickTrump(3)">♣</button>
         </div>
     </div>
-    <div id="container"></div>
+    <div id="container">
+        <div id="trick-bg"></div>
+    </div>
 
     <script>
         var PLAYER_NAMES = ["South", "West", "North", "East"];
@@ -87,6 +102,9 @@
         var prevScores = [0, 0];
         var animatingCards = {};
         var container = document.getElementById('container');
+
+        var spreadStates = {};
+        var selectedPacks = 1;
 
         function createPlayerLabels() {
             var labels = [
@@ -101,31 +119,196 @@
                 el.id = 'plabel-' + l.idx;
                 el.textContent = l.text;
                 el.style.cssText = l.pos.split('-')[0] + ': ' + l.pos.split('-')[1];
-                // Use fixed positioning relative to center
                 switch (l.idx) {
                     case 0: el.style.cssText = 'bottom: 0.5rem; left: 50%; transform: translateX(-50%);'; break;
                     case 1: el.style.cssText = 'top: 50%; left: 0.5rem; transform: translateY(-50%);'; break;
-                    case 2: el.style.cssText = 'top: 3rem; left: 50%; transform: translateX(-50%);'; break;
+                    case 2: el.style.cssText = 'top: calc(50% - 5rem); left: 50%; transform: translateX(-50%);'; break;
                     case 3: el.style.cssText = 'top: 50%; right: 0.5rem; transform: translateY(-50%);'; break;
                 }
+                var btn = document.createElement('a');
+                btn.href = '#';
+                btn.className = 'spread-btn';
+                btn.textContent = '[Spread]';
+                btn.dataset.player = l.idx;
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    toggleSpread(parseInt(this.dataset.player));
+                });
+                el.appendChild(btn);
                 document.body.appendChild(el);
             });
         }
         createPlayerLabels();
 
+        function getPlayerCardEls(player) {
+            var els = [];
+            for (var cid in cardMap) {
+                if (cardMap[cid].player === player) {
+                    els.push({ el: cardMap[cid].el, idx: cardMap[cid].handIndex });
+                }
+            }
+            els.sort(function(a, b) { return a.idx - b.idx; });
+            return els.map(function(e) { return e.el; });
+        }
+
+        function toggleSpread(player) {
+            var els = getPlayerCardEls(player);
+            if (!els.length) return;
+            var btn = document.querySelector('.spread-btn[data-player="' + player + '"]');
+            if (spreadStates[player]) {
+                spreadStates[player] = false;
+                btn.textContent = '[Spread]';
+                window.restoreCardPositions(els);
+            } else {
+                spreadStates[player] = true;
+                btn.textContent = '[Fold]';
+                window.spreadCardsHorizontally(player, els);
+            }
+        }
+
+        function sleep(ms) {
+            return new Promise(function(resolve) { setTimeout(resolve, ms); });
+        }
+
         async function deal() {
             container.innerHTML = '';
+            var bg = document.createElement('div');
+            bg.id = 'trick-bg';
+            container.appendChild(bg);
             cardMap = {};
             prevScores = [0, 0];
+            spreadStates = {};
             document.querySelectorAll('.player-label').forEach(function(el) { el.style.display = 'block'; });
-            var res = await fetch('/game/deal', { method: 'POST' });
+            document.querySelectorAll('.spread-btn').forEach(function(el) { el.textContent = '[Spread]'; });
+            var res = await fetch('/game/deal', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ packs: selectedPacks })
+            });
             var state = await res.json();
-            applyState(state);
+            document.getElementById('topmsg').textContent = 'Dealing...';
+
+            // Central deck visual
+            var deckEl = document.createElement('div');
+            deckEl.id = 'deck-center';
+            for (var di = 0; di < 5; di++) {
+                var layer = document.createElement('div');
+                layer.className = 'deck-layer';
+                var rot = (di - 2) * 1.5;
+                var tx = (di - 2) * 0.8;
+                var ty = (di - 2) * 0.5;
+                layer.style.transform = 'translate(' + tx + 'px, ' + ty + 'px) rotate(' + rot + 'deg)';
+                layer.style.zIndex = di;
+                deckEl.appendChild(layer);
+            }
+            container.appendChild(deckEl);
+
+            // Create all card elements face-down at center; build deal queue
+            var allItems = [];
+            var maxCards = 0;
+            state.hands.forEach(function(hand, player) {
+                if (hand.length > maxCards) maxCards = hand.length;
+                hand.forEach(function(card, idx) {
+                    var el = window.createCard(card.card_id, card.suit_class, card.rank);
+                    el.classList.add('dealing');
+                    var back = document.createElement('div');
+                    back.className = 'back';
+                    el.appendChild(back);
+                    el.style.transform = 'translate(0px, 0px) rotate(0deg)';
+                    el.style.display = 'none';
+                    container.appendChild(el);
+                    allItems.push({ el: el, card: card, player: player, handIndex: idx, handSize: hand.length });
+                });
+            });
+
+            // Build round-robin deal queue
+            var dealQueue = [];
+            for (var round = 0; round < maxCards; round++) {
+                for (var p = 0; p < 4; p++) {
+                    for (var ci = 0; ci < allItems.length; ci++) {
+                        if (allItems[ci].player === p && allItems[ci].handIndex === round) {
+                            dealQueue.push(allItems[ci]);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // 3-phase deal: snap to deck → pop up → fly to player area
+            var playerPos = {
+                0: { x: 0, y: 230 }, 1: { x: -310, y: 0 },
+                2: { x: 0, y: -230 }, 3: { x: 310, y: 0 }
+            };
+            var dealDelay = Math.max(40, Math.min(100, 700 / dealQueue.length));
+            var liftTime = 40;
+            var flyTime = 200;
+            for (var i = 0; i < dealQueue.length; i++) {
+                var item = dealQueue[i];
+                var el = item.el;
+                el.style.display = '';
+                el.style.zIndex = 10000 + i;
+                var pos = playerPos[item.player];
+                var ox = (Math.random() - 0.5) * 15;
+                var oy = (Math.random() - 0.5) * 15;
+                var tilt = (Math.random() - 0.5) * 8;
+                // Phase 1: snap to deck position (small random offset)
+                el.style.transition = 'none';
+                el.style.transform = 'translate(' + ox + 'px, ' + oy + 'px) rotate(0deg)';
+                void el.offsetHeight;
+                // Phase 2: pop up from deck
+                el.style.transition = 'transform ' + liftTime + 'ms ease-out';
+                el.style.transform = 'translate(' + ox + 'px, ' + (-50 + oy) + 'px) rotate(' + tilt + 'deg)';
+                await sleep(liftTime);
+                // Phase 3: fly to player area (natural decelerating ease)
+                (function(e, px, py) {
+                    requestAnimationFrame(function() {
+                        e.style.transition = 'transform ' + flyTime + 'ms cubic-bezier(0.1, 0.8, 0.25, 1.0)';
+                        e.style.transform = 'translate(' + px + 'px, ' + py + 'px) rotate(0deg)';
+                    });
+                })(el, pos.x + ox, pos.y + oy);
+                await sleep(dealDelay);
+            }
+            await sleep(flyTime + 100);
+            if (deckEl.parentNode) deckEl.remove();
+
+            // Flip all cards face-up
+            allItems.forEach(function(item) {
+                var back = item.el.querySelector('.back');
+                if (back) back.remove();
+                item.el.classList.remove('dealing');
+                item.el.style.transition = 'none';
+                item.el.classList.add(item.player % 2 === 0 ? 'team-red' : 'team-blue');
+                cardMap[item.card.card_id] = { el: item.el, player: item.player, handIndex: item.handIndex };
+            });
+
+            // Arrange to final hand positions (animates from fly position, not center)
+            state.hands.forEach(function(hand, player) {
+                hand.forEach(function(card, idx) {
+                    var entry = cardMap[card.card_id];
+                    if (entry) {
+                        window.animateCardToPosition(entry.el, player, idx, hand.length, idx + player * 100, function(el) {
+                            if (state.phase === 'playing' && player === state.current_player) {
+                                el.classList.add('playable');
+                                el.onclick = function() { playCard(card.card_id, player); };
+                            }
+                        });
+                    }
+                });
+            });
+
+            // Apply non-card state
+            applyNonCardState(state);
+
+            var totalPts = selectedPacks * 28;
+            var bidInput = document.getElementById('bid-score');
+            bidInput.min = Math.ceil(totalPts / 2);
+            bidInput.max = totalPts;
+            bidInput.value = bidInput.min;
         }
 
         async function pickTrump(suit) {
             var caller = parseInt(document.querySelector('input[name="caller-team"]:checked').value);
-            var expected = parseInt(document.getElementById('bid-score').value) || 3;
+            var expected = parseInt(document.getElementById('bid-score').value) || Math.ceil(selectedPacks * 28 / 2);
             var res = await fetch('/game/trump', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -165,10 +348,8 @@
             applyState(result.state, result.completed_trick);
         }
 
-        function applyState(state, completedTrick) {
+        function applyNonCardState(state) {
             if (!state) return;
-            lastState = state;
-
             // Scores with pop animation on change
             var s1 = document.getElementById('score-team1');
             var s2 = document.getElementById('score-team2');
@@ -178,7 +359,6 @@
             if (newScores[0] !== prevScores[0]) { s1.classList.remove('score-pop'); void s1.offsetWidth; s1.classList.add('score-pop'); }
             if (newScores[1] !== prevScores[1]) { s2.classList.remove('score-pop'); void s2.offsetWidth; s2.classList.add('score-pop'); }
             prevScores = newScores;
-
             // Trump info
             var trumpEl = document.getElementById('trump-indicator');
             if (state.trump_name) {
@@ -191,7 +371,6 @@
             } else {
                 trumpEl.textContent = 'Trump: -';
             }
-
             // Turn indicator
             var turnEl = document.getElementById('turn-indicator');
             if (state.phase === 'playing') {
@@ -205,29 +384,71 @@
             } else {
                 turnEl.textContent = 'Phase: ' + state.phase;
             }
-
             // Message
             var msgEl = document.getElementById('message');
             msgEl.textContent = state.message || '';
             msgEl.classList.toggle('winner-msg', state.phase === 'game_over');
-
+            document.getElementById('topmsg').textContent = state.phase === 'pick_trump' || state.phase === 'round_over' || state.phase === 'game_over' ? state.message || '' : '';
             // Trump picker
             var picker = document.getElementById('trump-picker');
             picker.style.display = state.phase === 'pick_trump' ? 'block' : 'none';
-
             if (state.phase === 'game_over') {
                 msgEl.textContent = 'Game Over! ' + TEAM_NAMES[state.winner] + ' wins!';
                 document.querySelectorAll('.player-label').forEach(function(el) { el.style.display = 'none'; });
             }
+        }
+
+        function getTrickLeader(trickCards, trumpSuit) {
+            if (!trickCards || trickCards.length === 0) return -1;
+            var leadSuit = trickCards[0][1].suit;
+            var bestPlayer = trickCards[0][0];
+            var bestCard = trickCards[0][1];
+            for (var i = 1; i < trickCards.length; i++) {
+                var player = trickCards[i][0];
+                var card = trickCards[i][1];
+                if (card.suit === trumpSuit && bestCard.suit !== trumpSuit) {
+                    bestPlayer = player;
+                    bestCard = card;
+                } else if (card.suit === trumpSuit && bestCard.suit === trumpSuit) {
+                    if (card.power > bestCard.power) {
+                        bestPlayer = player;
+                        bestCard = card;
+                    }
+                } else if (card.suit === leadSuit && bestCard.suit === leadSuit) {
+                    if (card.power > bestCard.power) {
+                        bestPlayer = player;
+                        bestCard = card;
+                    }
+                }
+            }
+            return bestPlayer;
+        }
+
+        function applyState(state, completedTrick) {
+            if (!state) return;
+            lastState = state;
+            applyNonCardState(state);
 
             var activeIds = new Set();
 
-            function setClickable(el, cardId, player, isActive) {
-                el.classList.remove('playable');
+            function setClickable(el, cardId, player, isActive, cardSuit) {
+                el.classList.remove('playable', 'not-playable');
                 el.onclick = null;
                 if (isActive) {
-                    el.classList.add('playable');
-                    el.onclick = function() { playCard(cardId, player); };
+                    var canPlay = true;
+                    if (state.current_trick && state.current_trick.length > 0) {
+                        var ledSuit = state.current_trick[0][1].suit;
+                        if (cardSuit !== ledSuit) {
+                            var hasLedSuit = state.hands[player].some(function(c) { return c.suit === ledSuit; });
+                            if (hasLedSuit) canPlay = false;
+                        }
+                    }
+                    if (canPlay) {
+                        el.classList.add('playable');
+                        el.onclick = function() { playCard(cardId, player); };
+                    } else {
+                        el.classList.add('not-playable');
+                    }
                 }
             }
 
@@ -240,14 +461,14 @@
                         entry.handIndex = idx;
                         entry.player = player;
                         var isActive = state.phase === 'playing' && player === state.current_player;
-                        setClickable(entry.el, card.card_id, player, isActive);
+                        setClickable(entry.el, card.card_id, player, isActive, card.suit);
                     } else {
                         var el = window.createCard(card.card_id, card.suit_class, card.rank);
                         el.classList.add(player % 2 === 0 ? 'team-red' : 'team-blue');
                         container.appendChild(el);
                         window.animateCardToPosition(el, player, idx, hand.length, idx + player * 100, function(el) {
                             var isActive = state.phase === 'playing' && player === state.current_player;
-                            setClickable(el, card.card_id, player, isActive);
+                            setClickable(el, card.card_id, player, isActive, card.suit);
                         });
                         cardMap[card.card_id] = { el: el, player: player, handIndex: idx };
                     }
@@ -258,12 +479,17 @@
             var trickCards = completedTrick || state.current_trick || [];
             // Highlight winner if completed trick
             var winnerPlayer = completedTrick && completedTrick.length === 4 && completedTrick[3] ? completedTrick[3][0] : -1;
+            // Highlight current leader if trick in progress
+            var currentLeader = (!completedTrick && state.current_trick && state.current_trick.length > 0)
+                ? getTrickLeader(state.current_trick, state.trump_suit)
+                : -1;
 
             trickCards.forEach(function(item, idx) {
                 var playerIdx = item[0];
                 var c = item[1];
                 activeIds.add(c.card_id);
                 var tx = (idx - 1.5) * 65;
+                var ty = playerIdx === winnerPlayer ? -14 : (playerIdx === currentLeader ? -7 : 0);
 
                 if (cardMap[c.card_id]) {
                     // Card was animated from hand — reuse it
@@ -271,7 +497,7 @@
                     var el = entry.el;
                     el.classList.remove('playable');
                     el.onclick = null;
-                    el.style.transform = 'translate(' + tx + 'px, 0px) rotate(0deg)';
+                    el.style.transform = 'translate(' + tx + 'px, ' + ty + 'px) rotate(0deg)';
                     el.style.zIndex = 10000 + idx;
                     el.classList.add('played');
                     if (playerIdx === winnerPlayer) {
@@ -279,20 +505,44 @@
                     } else {
                         el.classList.remove('trick-winner');
                     }
+                    if (playerIdx === currentLeader) {
+                        el.classList.add('trick-leading');
+                    } else {
+                        el.classList.remove('trick-leading');
+                    }
                 } else {
                     // New trick card (e.g. after Continue)
                     var el = window.createCard(c.card_id, c.suit_class, c.rank);
                     el.classList.add(playerIdx % 2 === 0 ? 'team-red' : 'team-blue');
                     el.classList.add('played');
-                    el.style.transform = 'translate(' + tx + 'px, 0px) rotate(0deg)';
+                    el.style.transform = 'translate(' + tx + 'px, ' + ty + 'px) rotate(0deg)';
                     el.style.zIndex = 10000 + idx;
                     container.appendChild(el);
                     if (playerIdx === winnerPlayer) {
                         el.classList.add('trick-winner');
                     }
+                    if (playerIdx === currentLeader) {
+                        el.classList.add('trick-leading');
+                    }
                     cardMap[c.card_id] = { el: el, player: -1, handIndex: -1 };
                 }
             });
+
+            // --- Update trick background based on winning team ---
+            var leader = winnerPlayer >= 0 ? winnerPlayer : currentLeader;
+            var bgEl = document.getElementById('trick-bg');
+            if (bgEl) {
+                if (leader >= 0) {
+                    var isRed = leader % 2 === 0;
+                    bgEl.style.backgroundColor = isRed ? 'rgba(220, 50, 50, 0.15)' : 'rgba(50, 100, 255, 0.15)';
+                    bgEl.style.boxShadow = isRed
+                        ? '0 0 30px rgba(220, 50, 50, 0.2), inset 0 0 30px rgba(220, 50, 50, 0.1)'
+                        : '0 0 30px rgba(50, 100, 255, 0.2), inset 0 0 30px rgba(50, 100, 255, 0.1)';
+                } else {
+                    bgEl.style.backgroundColor = 'transparent';
+                    bgEl.style.boxShadow = 'none';
+                }
+            }
 
             // --- Remove orphaned cards (skip animating ones) ---
             for (var cid in cardMap) {
@@ -345,11 +595,13 @@
         }
 
         document.getElementById('btn-deal').addEventListener('click', deal);
-        document.getElementById('btn-new').addEventListener('click', async function() {
-            await fetch('/game/new', { method: 'POST' });
-            deal();
+        document.querySelectorAll('.deck-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.deck-btn').forEach(function(b) { b.classList.remove('active'); });
+                this.classList.add('active');
+                selectedPacks = parseInt(this.dataset.packs);
+            });
         });
-
         window.addEventListener('DOMContentLoaded', deal);
     </script>
 </body>
